@@ -24,6 +24,10 @@ length(patients)
 length(samples_sequenced)
 
 # filtering metadata
+metadata_samples = read.table('data/brca_metabric/data_clinical_sample.txt', 
+                              sep = '\t', header = T) %>% 
+  as_tibble()
+
 metadata_patient = read.table('data/brca_metabric/data_clinical_patient.txt', 
                               sep = '\t', header = T) %>% 
   as_tibble()
