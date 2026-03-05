@@ -127,4 +127,143 @@ create_annotation = function(x, ann_colors, position) {
   
 }
 
+# cna analysis ----
+
+# test for enrichment of cna events between different groups
+
+create_table = function(data, 
+                        test_lv) {
+  data %>% 
+    mutate(cna_lv = ifelse(cna_lv != test_lv, 'Other', test_lv)) %>% 
+    dplyr::count(Hugo_Symbol, Inferred_menopause_status, cna_lv) %>%
+    complete(Hugo_Symbol, Inferred_menopause_status, cna_lv, fill = list(n = 0)) %>% 
+    group_by(Hugo_Symbol) %>% 
+    summarise(
+      tab = list(xtabs(n ~ Inferred_menopause_status + cna_lv, data = cur_data(), drop.unused.levels = FALSE))
+    ) %>% 
+    deframe()
+  
+}
+
+# plot utils 
+
+plot_volcano_cna_genes = function(x, which, pth = .05, driver_list = NULL, cols) {
+  
+  df = x %>% 
+    dplyr::select(gene, log2FC, p.value, cna_alteration) %>% 
+    # filter(if_any(starts_with("FC"), ~ !is.infinite(.x)))
+    filter(!is.na(log2FC)) %>% 
+    filter(!is.infinite(log2FC))
+  
+  # add classes
+  df = df %>% 
+    mutate(cls = 
+             case_when(
+               p.value <= pth ~ 'Significant', 
+               .default = 'ns'
+             ))  %>% 
+    mutate(log2FC = log2FC*-1) %>% 
+    filter(cna_alteration %in% which)
+  
+  # add driver labels
+  df = df %>% 
+    mutate(is_driver = ifelse(gene %in% driver_list, TRUE, FALSE)) %>% 
+    mutate(is_driver = factor(is_driver, levels = c(TRUE, FALSE))) %>% 
+    mutate(dr_label = ifelse((is_driver == TRUE & cls == 'Significant'), gene, NA))
+  
+  df %>% 
+    # filter(is_driver) %>% 
+    ggplot(aes(x = log2FC, 
+               y = -log(p.value, base = 10), 
+               shape = is_driver, 
+               label = dr_label,
+               # size = is_driver, 
+               color = cls)) + 
+    geom_point() +
+    # geom_label() +
+    scale_color_manual(values = c('Significant' = 'navyblue', 'ns' = 'grey20')) +
+    scale_shape_manual(values = setNames(object = c(8, 1), c(TRUE, FALSE))) + 
+    geom_hline(yintercept = -log(pth, base = 10), 
+               linetype = 'dashed', 
+               colour = 'firebrick'
+    ) + 
+    geom_vline(xintercept = 0, 
+               linetype = 'dashed', 
+               colour = 'grey'
+    ) + 
+    theme_bw() + 
+    ggplot2::geom_rect(data=data.frame(xmin=0,xmax=Inf,ymin=-Inf,ymax=Inf, Sample_type = 'post'),
+                       aes(xmin = xmin, xmax =xmax, ymin = ymin, ymax = ymax, fill = Sample_type),
+                       alpha=0.3, inherit.aes = F)+
+    ggplot2::geom_rect(data=data.frame(xmin=-Inf,xmax=0,ymin=-Inf,ymax=Inf, Sample_type = 'pre'),
+                       aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax, fill = Sample_type),
+                       alpha=0.3, inherit.aes = F) + 
+    # ggplot2::scale_fill_manual(values = c('pre' = "goldenrod1", 'post' = '#CBA1D2')) +
+    ggplot2::scale_fill_manual(values = c('pre' = unname(cols['Pre']), 'post' = unname(cols['Post'])), 
+      # values = c('pre' = rgb(210, 231, 167, maxColorValue = 255), 'post' = '#CBA1D2'),
+                               labels = c('pre' = 'Pre−Menopause', 'post' = 'Post−Menopause')) +
+    ggrepel::geom_text_repel(max.overlaps = 100, show.legend = F, color = 'black') +
+    ylab('-log(pVal)') + 
+    facet_wrap(~cna_alteration, scales = 'free')
+}
+
+# plot volcano mutations
+plot_volcano_mut_genes = function(x, pth = .05, driver_list = NULL, cols) {
+  
+  df = x %>% 
+    dplyr::select(gene, log2FC, p.value) %>% 
+    # filter(if_any(starts_with("FC"), ~ !is.infinite(.x)))
+    filter(!is.na(log2FC)) %>% 
+    filter(!is.infinite(log2FC))
+  
+  # add classes
+  df = df %>% 
+    mutate(cls = 
+             case_when(
+               p.value <= pth ~ 'Significant', 
+               .default = 'ns'
+             ))  %>% 
+    mutate(log2FC = log2FC*-1) 
+  
+  # add driver labels
+  df = df %>% 
+    mutate(is_driver = ifelse(gene %in% driver_list, TRUE, FALSE)) %>% 
+    mutate(is_driver = factor(is_driver, levels = c(TRUE, FALSE))) %>% 
+    mutate(dr_label = ifelse((is_driver == TRUE & cls == 'Significant'), gene, NA))
+  
+  df %>% 
+    # filter(is_driver) %>% 
+    ggplot(aes(x = log2FC, 
+               y = -log(p.value, base = 10), 
+               shape = is_driver, 
+               label = dr_label,
+               # size = is_driver, 
+               color = cls)) + 
+    geom_point() +
+    # geom_label() +
+    scale_color_manual(values = c('Significant' = 'navyblue', 'ns' = 'grey20')) +
+    scale_shape_manual(values = setNames(object = c(8, 1), c(TRUE, FALSE))) + 
+    geom_hline(yintercept = -log(pth, base = 10), 
+               linetype = 'dashed', 
+               colour = 'firebrick'
+    ) + 
+    geom_vline(xintercept = 0, 
+               linetype = 'dashed', 
+               colour = 'grey'
+    ) + 
+    theme_bw() + 
+    ggplot2::geom_rect(data=data.frame(xmin=0,xmax=Inf,ymin=-Inf,ymax=Inf, Sample_type = 'post'),
+                       aes(xmin = xmin, xmax =xmax, ymin = ymin, ymax = ymax, fill = Sample_type),
+                       alpha=0.3, inherit.aes = F)+
+    ggplot2::geom_rect(data=data.frame(xmin=-Inf,xmax=0,ymin=-Inf,ymax=Inf, Sample_type = 'pre'),
+                       aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax, fill = Sample_type),
+                       alpha=0.3, inherit.aes = F) + 
+    # ggplot2::scale_fill_manual(values = c('pre' = "goldenrod1", 'post' = '#CBA1D2')) +
+    ggplot2::scale_fill_manual(values = c('pre' = unname(cols['Pre']), 'post' = unname(cols['Post'])), 
+                               # values = c('pre' = rgb(210, 231, 167, maxColorValue = 255), 'post' = '#CBA1D2'),
+                               labels = c('pre' = 'Pre−Menopause', 'post' = 'Post−Menopause')) +
+    ggrepel::geom_text_repel(max.overlaps = 100, show.legend = F, color = 'black') +
+    ylab('-log(pVal)') 
+}
+
 
