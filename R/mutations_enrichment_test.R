@@ -32,7 +32,7 @@ nPost = menopause_status %>% filter(Inferred_menopause_status == 'Post') %>% pul
 
 mut_counts = muts_selected %>% 
   mutate(Inferred_menopause_status = as.character(Inferred_menopause_status)) %>% 
-  filter(Inferred_menopause_status != 'Unkwon') %>% 
+  filter(Inferred_menopause_status != 'Unknown') %>% 
   mutate(mut_status = ifelse(
     is.na(Variant_Classification) | Variant_Classification == "Silent",
     "wild-type",
